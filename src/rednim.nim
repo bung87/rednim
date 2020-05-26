@@ -1,7 +1,8 @@
 import asyncnet, asyncdispatch, net
 import tables
 import redisparser, strutils
-
+const OK = "+OK\r\n"
+const RequestError = "-Error $#\r\n"
 var 
   clients {.threadvar.}: seq[AsyncSocket]
   kvStore = initTable[string, RedisValue]()
@@ -9,7 +10,7 @@ var
 
 proc killClient(client: AsyncSocket) =
   var cIndex = clients.find(client)
-  if cIndex >= 0:
+  if -1 != cIndex:
     clients.del(cIndex)
 
 
@@ -80,8 +81,6 @@ proc sendClientResponse(client: AsyncSocket, data: string) {.async.} =
   if isNil(value):
     return 
   debugEcho "Operating on : " & $value
-  let OK = $encodeValue(RedisValue(kind:vkStr, s:"OK"))
-  let KO = $encodeValue(RedisValue(kind:vkStr, s:"KO"))
   case value.kind:
   # A client sends the Redis server a RESP Array consisting of just Bulk Strings.
   of vkArray:
@@ -117,7 +116,7 @@ proc sendClientResponse(client: AsyncSocket, data: string) {.async.} =
       client.close()
       killClient(client)
   else:
-    raise newException(ValueError,"Request must be list or simple string.")
+    response = RequestError % "Request must be list or simple string."
   await client.send(response)
 
 proc handleClientRequest(client: AsyncSocket,cdata:string) {.async.} =

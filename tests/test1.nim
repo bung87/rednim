@@ -30,6 +30,6 @@ test "can add":
   check $waitFor(con.execCommand("SET", @["auser", "avalue"])) == "OK"
   check $waitFor(con.execCommand("GET", @["auser"])) == "avalue"
   check $waitFor(con.quit()) == "OK"
-  process.close
+  process.terminate
   
   # echo $con.execCommand("SCAN", @["0"])
