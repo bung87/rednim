@@ -2,6 +2,7 @@ import asyncnet, asyncdispatch, net
 import tables
 import redisparser, strutils
 const OK = "+OK\r\n"
+const PONG = "+PONG\r\n"
 const RequestError = "-Error $#\r\n"
 var 
   clients {.threadvar.}: seq[AsyncSocket]
@@ -78,9 +79,8 @@ proc sendClientResponse(client: AsyncSocket, data: string) {.async.} =
   debugEcho "receive :" & data
   var response: string
   var value:RedisValue = decodeString(data)
-  if isNil(value):
-    return 
   debugEcho "Operating on : " & $value
+  # let PONG:RedisValue = RedisValue(kind:vkBulkStr,bs:"PONG")
   case value.kind:
   # A client sends the Redis server a RESP Array consisting of just Bulk Strings.
   of vkArray:
@@ -115,6 +115,10 @@ proc sendClientResponse(client: AsyncSocket, data: string) {.async.} =
       await client.send(response)
       client.close()
       killClient(client)
+    of "PING":
+      response = PONG
+    of "SHUTDOWN":
+      quit()
   else:
     response = RequestError % "Request must be list or simple string."
   await client.send(response)
@@ -130,12 +134,12 @@ proc processClient(client: AsyncSocket) {.async.} =
     else:
       await handleClientRequest(client,cdata)
 
-proc serveAsync*() {.async.} = 
+proc serveAsync*(port=6379) {.async.} = 
   clients = @[]
   var server = newAsyncSocket(buffered = true)
 
   server.setSockOpt(OptReuseAddr, true)
-  server.bindAddr( Port(6379) )
+  server.bindAddr( Port(port) )
   server.listen()
 
   while true:
@@ -145,5 +149,10 @@ proc serveAsync*() {.async.} =
 
 
 when isMainModule:
-  asyncCheck serveAsync()
-  runForever()
+  proc rednim(port=6379): int =
+    echo "server on port:" & $port
+    result = 0
+    asyncCheck serveAsync(port)
+    runForever()
+  import cligen; dispatch(rednim)
+  

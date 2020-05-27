@@ -11,5 +11,6 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 1.3.5"
-requires "redisparser"
-requires "redisclient"
+requires "https://github.com/xmonader/nim-redisparser#head"
+requires "https://github.com/xmonader/nim-redisclient#head"
+requires "cligen"

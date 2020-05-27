@@ -9,28 +9,24 @@ import unittest,asyncdispatch,redisclient
 import redisparser
 import os, osproc
 var process: Process
-test "set get quit":
+test "can ping shutdown":
   let souce =  getCurrentDir() / "src" / "rednim.nim"
   let exe = getCurrentDir() / "src" / "rednim"
   let (output,code) = execCmdEx("nim c " & souce)
   if code != 0:
     raise newException(IOError, output)
-  const port = 6390
+  const port = 6699
   process = startProcess(exe,args=["--port",$port],options={poParentStreams})
   var con:AsyncRedis
   var i = 0
   while i < 500:
     try:
-      con = waitFor openAsync("localhost", port.Port,false)
+      con = waitFor openAsync("localhost", port.Port,false,500)
       break
     except:
       i += 1
       continue
 
-  # echo $con.execCommand("PING", @[])
-  check $waitFor(con.execCommand("SET", @["auser", "avalue"])) == "OK"
-  check $waitFor(con.execCommand("GET", @["auser"])) == "avalue"
-  check $waitFor(con.quit()) == "OK"
+  check $waitFor(con.execCommand("PING", @[])) == "PONG"
+  asyncCheck(con.shutdown())
   process.terminate
-  
-  # echo $con.execCommand("SCAN", @["0"])
