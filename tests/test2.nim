@@ -29,5 +29,6 @@ test "can ping shutdown":
       continue
 
   check $waitFor(con.execCommand("PING", @[])) == "PONG"
+  check $waitFor(con.execCommand("PING", @["hello world"])) == "hello world"
   asyncCheck(con.shutdown())
   process.terminate

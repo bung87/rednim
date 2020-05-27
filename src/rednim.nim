@@ -80,7 +80,7 @@ proc sendClientResponse(client: AsyncSocket, data: string) {.async.} =
   var response: string
   var value:RedisValue = decodeString(data)
   debugEcho "Operating on : " & $value
-  # let PONG:RedisValue = RedisValue(kind:vkBulkStr,bs:"PONG")
+  
   case value.kind:
   # A client sends the Redis server a RESP Array consisting of just Bulk Strings.
   of vkArray:
@@ -94,12 +94,11 @@ proc sendClientResponse(client: AsyncSocket, data: string) {.async.} =
         kvStore[$value.l[1]] = value.l[2]
         response = OK
     of "MGET":
+      var arr:seq[RedisValue] = @[]
+      var v:RedisValue = RedisValue(kind:vkArray,l:arr)
       for i in 1..<value.l.len:
-        try:
-          response = response & " " & $kvStore[$value.l[i]]
-        except:
-          response = response & " KO"
-        response = response.strip()
+        arr.add kvStore[$value.l[i]]
+      response = $encodeValue v
     of "MSET":
       for i in countup(1, value.l.len-2, 2):
         kvStore[$value.l[i]] = value.l[i+1]
@@ -116,9 +115,17 @@ proc sendClientResponse(client: AsyncSocket, data: string) {.async.} =
       client.close()
       killClient(client)
     of "PING":
-      response = PONG
+      if value.l.len != 2:
+        response = PONG
+      else:
+        let PONG:RedisValue = RedisValue(kind:vkBulkStr,bs: $value.l[1])
+        response = $encodeValue PONG
     of "SHUTDOWN":
       quit()
+    of "ECHO":
+      if value.l.len == 2:
+        let ECHO:RedisValue = RedisValue(kind:vkBulkStr,bs: $value.l[1])
+        response = $encodeValue ECHO
   else:
     response = RequestError % "Request must be list or simple string."
   await client.send(response)
