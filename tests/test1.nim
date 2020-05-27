@@ -11,7 +11,8 @@ import os, osproc
 var process: Process
 test "set get quit":
   let souce =  getCurrentDir() / "src" / "rednim.nim"
-  let exe = getCurrentDir() / "src" / "rednim"
+  const name = when defined(windows) : "rednim.exe" else : "rednim"
+  let exe = getCurrentDir() / "src" / name
   let (output,code) = execCmdEx("nim c " & souce)
   if code != 0:
     raise newException(IOError, output)
