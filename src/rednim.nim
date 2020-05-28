@@ -1,13 +1,13 @@
 import asyncnet, asyncdispatch, net
 import tables
-import redisparser, strutils
+import redisparser, strutils,sequtils
 const OK = "+OK\r\n"
 const PONG = "+PONG\r\n"
 const RequestError = "-Error $#\r\n"
 var 
   clients {.threadvar.}: seq[AsyncSocket]
   kvStore = initTable[string, RedisValue]()
-
+  keys = newSeq[string]()
 
 proc killClient(client: AsyncSocket) =
   var cIndex = clients.find(client)
@@ -90,8 +90,15 @@ proc sendClientResponse(client: AsyncSocket, data: string) {.async.} =
         response = $encodeValue kvStore[$value.l[1]]
       else:
         response = OK
+    of "EXISTS":
+      if kvStore.hasKey($value.l[1]):
+        response = $encodeValue RedisValue(kind:vkInt,i: 1)
+      else:
+        response = $encodeValue RedisValue(kind:vkInt,i: 0)
     of "SET":
-        kvStore[$value.l[1]] = value.l[2]
+        let tmp = $value.l[1]
+        keys.add tmp
+        kvStore[tmp] = value.l[2]
         response = OK
     of "MGET":
       var arr:seq[RedisValue] = @[]
@@ -100,12 +107,30 @@ proc sendClientResponse(client: AsyncSocket, data: string) {.async.} =
         arr.add kvStore[$value.l[i]]
       response = $encodeValue v
     of "MSET":
+      var tmp:string 
       for i in countup(1, value.l.len-2, 2):
-        kvStore[$value.l[i]] = value.l[i+1]
+        tmp = $value.l[i]
+        keys.add tmp
+        kvStore[tmp] = value.l[i+1]
       response = OK
     of "DELETE":
-      kvStore.del($value.l[1])
+      let tmp = $value.l[1]
+      for i,m in keys:
+        if m == tmp:
+          keys.delete(i)
+          break
+      kvStore.del(tmp)
       response = OK
+    of "SCAN":
+      let offset = if value.l.len > 1 : parseInt $value.l[1] else: 0
+      var arr:seq[RedisValue] 
+      let keyL = keys.len
+      let next = if offset + 10 < keyL : offset + 10 else : 0
+      let hIndex = if offset + 10 < keyL : offset + 10 else : keyL
+      arr.add RedisValue(kind: vkStr, s: $next )
+      arr.add keys[offset..<hIndex].mapIt( RedisValue(kind: vkStr, s: $it) )
+      let v:RedisValue = RedisValue(kind:vkArray,l:arr)
+      response = $encodeValue v
     of "FLUSH":
       kvStore.clear()
       response = OK
